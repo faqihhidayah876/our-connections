@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, X, Home, CheckSquare, CalendarDays, MapPin, Settings, User, ArrowLeft, Heart, Droplet } from 'lucide-react';
+import { Menu, X, Home, CheckSquare, CalendarDays, MapPin, Settings, User, ArrowLeft, Heart, Droplet, MessageCircle } from 'lucide-react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
@@ -30,7 +30,7 @@ export default function Layout() {
       if (session) fetchMyAvatar(session.user.id);
     });
 
-    // BARU: Dengarkan perubahan profil secara real-time di Layout!
+    // Dengarkan perubahan profil secara real-time di Layout!
     const profileSub = supabase.channel('layout_avatar')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
         if (currentSession) fetchMyAvatar(currentSession.user.id);
@@ -44,7 +44,6 @@ export default function Layout() {
 
   const fetchMyAvatar = async (userId) => {
     const { data } = await supabase.from('profiles').select('avatar_url').eq('id', userId).single();
-    // Jika data null, atur jadi string kosong supaya kembali ke icon default
     setMyAvatar(data?.avatar_url || ''); 
   };
 
@@ -54,6 +53,7 @@ export default function Layout() {
   const isDashboard = location.pathname === '/dashboard';
 
   const getPageTitle = () => {
+    if (location.pathname.includes('/chat')) return 'Obrolan Kita'; // <-- Tambahan
     if (location.pathname.includes('/todo')) return 'To-Do List';
     if (location.pathname.includes('/calendar')) return 'Kalender';
     if (location.pathname.includes('/location')) return 'Lokasi & Baterai';
@@ -65,6 +65,7 @@ export default function Layout() {
 
   const menuItems = [
     { name: 'Dashboard', icon: Home, path: '/dashboard' },
+    { name: 'Obrolan', icon: MessageCircle, path: '/chat' }, // <-- Tambahan
     { name: 'To-Do List', icon: CheckSquare, path: '/todo' },
     { name: 'Kalender', icon: CalendarDays, path: '/calendar' },
     { name: 'Lokasi & Baterai', icon: MapPin, path: '/location' },
