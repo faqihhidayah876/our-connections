@@ -1,12 +1,21 @@
 import { MapPin, Battery, CheckCircle2, Circle, Calendar, BellRing, Heart, Clock, TrendingUp } from 'lucide-react';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { currentUser } = useOutletContext();
   const [selectedMood, setSelectedMood] = useState(0);
-  const isDateTomorrow = true; 
   
+  const [tasks, setTasks] = useState([]);
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const [partnerProfile, setPartnerProfile] = useState(null);
+  const [daysTogether, setDaysTogether] = useState(0);
+
+  const greetingText = currentUser === 'Aii' ? 'Hai Aii Cantikk! 💕' : 'Hai Faqih!!';
+  const partnerName = currentUser === 'Aii' ? 'Faqih' : 'Aii';
+
   const moods = [
     { emoji: '🥰', label: 'Happy', color: 'from-rose-400 to-pink-400' },
     { emoji: '🥺', label: 'Miss U', color: 'from-blue-400 to-indigo-400' },
@@ -14,47 +23,151 @@ export default function Dashboard() {
     { emoji: '😡', label: 'Angry', color: 'from-orange-400 to-red-400' },
   ];
 
-  const [tasks, setTasks] = useState([
-    { id: 1, text: "Udah Makan Siang", done: true, owner: "Aii", time: "12:30" },
-    { id: 2, text: "Shalat Dzuhur", done: false, owner: "Aii", time: "12:45" },
-    { id: 3, text: "Mandi Sore", done: false, owner: "Faqih", time: "16:00" },
-  ]);
+  useEffect(() => {
+    fetchDashboardData();
+    fetchProfilesData();
 
-  const toggleTask = (id) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, done: !t.done } : t));
+    const taskSub = supabase.channel('dash_tasks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+        fetchDashboardData();
+      }).subscribe();
+
+    const eventSub = supabase.channel('dash_events')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => {
+        fetchDashboardData();
+      }).subscribe();
+
+    const profileSub = supabase.channel('dash_profiles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        fetchProfilesData();
+      }).subscribe();
+
+    return () => {
+      supabase.removeChannel(taskSub);
+      supabase.removeChannel(eventSub);
+      supabase.removeChannel(profileSub);
+    };
+  }, [currentUser]);
+
+  const fetchDashboardData = async () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isoStart = today.toISOString();
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const { data: todayTasks } = await supabase.from('tasks').select('*').gte('created_at', isoStart).order('created_at', { ascending: false });
+    if (todayTasks) setTasks(todayTasks);
+
+    const { data: allEvents } = await supabase.from('events').select('*').gte('event_date', today.toISOString().split('T')[0]).order('event_date', { ascending: true });
+    if (allEvents) {
+      const filteredEvents = allEvents.filter(event => {
+        const eventDate = new Date(event.event_date);
+        eventDate.setHours(0, 0, 0, 0);
+        return eventDate.getTime() === today.getTime() || eventDate.getTime() === tomorrow.getTime();
+      });
+      setUpcomingEvents(filteredEvents);
+    }
+  };
+
+  const fetchProfilesData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data } = await supabase.from('profiles').select('*');
+    
+    if (data) {
+      const myProfile = data.find(p => p.id === user?.id);
+      if (myProfile) {
+        if (myProfile.anniversary_date) {
+          const start = new Date(myProfile.anniversary_date);
+          const now = new Date();
+          const diffDays = Math.ceil(Math.abs(now - start) / (1000 * 60 * 60 * 24));
+          setDaysTogether(diffDays);
+        }
+        
+        const myMoodIdx = moods.findIndex(m => m.emoji === myProfile.mood);
+        if (myMoodIdx !== -1) setSelectedMood(myMoodIdx);
+      }
+
+      const partner = data.find(p => p.id !== user?.id);
+      if (partner) setPartnerProfile(partner);
+    }
+  };
+
+  const handleUpdateMood = async (idx) => {
+    setSelectedMood(idx);
+    const chosenEmoji = moods[idx].emoji;
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').update({ mood: chosenEmoji, updated_at: new Date() }).eq('id', user.id);
+    }
+  };
+
+  const toggleTask = async (task) => {
+    // KUNCI KEAMANAN: Cek apakah tugas ini milik orang yang sedang login
+    if (task.owner !== currentUser) return; 
+
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: !task.is_done } : t));
+    await supabase.from('tasks').update({ is_done: !task.is_done }).eq('id', task.id);
+  };
+
+  const getEventStatus = (dateString) => {
+    const eventDate = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    eventDate.setHours(0, 0, 0, 0);
+    return eventDate.getTime() === today.getTime() ? 'hari_ini' : 'besok';
   };
 
   return (
     <div className="pb-20 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* Welcome Header */}
+      {/* Welcome Header Dinamis */}
       <div className="flex justify-between items-end px-1">
         <div>
           <p className="text-xs font-medium text-couple-muted mb-0.5">Selamat datang,</p>
-          <h2 className="text-xl font-bold text-couple-dark leading-tight">Hai Aii Cantikk! 💕</h2>
+          <h2 className="text-xl font-bold text-couple-dark leading-tight">{greetingText}</h2>
         </div>
         <div className="text-right">
           <p className="text-[10px] font-medium text-couple-muted">Hari ke</p>
-          <p className="text-lg font-bold gradient-text leading-tight">365</p>
+          <p className="text-lg font-bold gradient-text leading-tight">{daysTogether}</p>
         </div>
       </div>
+
+      {/* Card Status Pasangan */}
+      {partnerProfile && (
+        <div onClick={() => navigate('/profile')} className="glass-card p-4 flex items-center gap-4 cursor-pointer hover:bg-white/60 transition shadow-sm border-rose-200/50">
+          <div className="w-12 h-12 rounded-full bg-rose-100 border-2 border-white shadow-md overflow-hidden flex items-center justify-center shrink-0">
+            {partnerProfile.avatar_url ? (
+              <img src={partnerProfile.avatar_url} alt="Partner" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xl">🧑🏻‍💻</span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-couple-dark">{partnerProfile.name}</h3>
+              <span className="text-lg animate-bounce">{partnerProfile.mood || '🥰'}</span>
+            </div>
+            <p className="text-xs text-gray-500 truncate mt-0.5">{partnerProfile.bio || 'Belum ada caption'}</p>
+          </div>
+        </div>
+      )}
 
       {/* Mood Tracker */}
       <div className="glass-card p-5">
         <div className="flex justify-between items-center mb-4">
           <div>
             <h2 className="font-bold text-sm text-couple-dark">Gimana harinya?</h2>
-            <p className="text-[10px] text-couple-muted">Tap untuk update mood</p>
+            <p className="text-[10px] text-couple-muted">Tap untuk update status ke pasanganmu</p>
           </div>
-          <button className="bg-white/60 p-2 rounded-xl hover:bg-white transition shadow-sm border border-white/60">
-            <BellRing className="text-couple-primary w-4 h-4" />
-          </button>
         </div>
         <div className="flex justify-between gap-2">
           {moods.map((mood, idx) => (
             <button 
               key={idx}
-              onClick={() => setSelectedMood(idx)}
+              onClick={() => handleUpdateMood(idx)}
               className={`flex-1 flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all duration-300 ${
                 selectedMood === idx 
                   ? `bg-gradient-to-br ${mood.color} text-white shadow-lg scale-105` 
@@ -68,31 +181,43 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Date Countdown Card */}
-      {isDateTomorrow && (
-        <div 
-          onClick={() => navigate('/calendar')}
-          className="bg-gradient-to-br from-couple-primary via-rose-500 to-purple-500 rounded-2xl p-5 text-white shadow-xl shadow-rose-200/50 border border-white/20 relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-500/30 rounded-full translate-y-1/2 -translate-x-1/2 blur-xl" />
-          
-          <div className="relative z-10 flex items-center gap-4">
-            <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm border border-white/20">
-              <Calendar className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="bg-white/20 px-2 py-0.5 rounded-md text-[10px] font-bold backdrop-blur-sm border border-white/10">BESOK</span>
-                <Clock className="w-3 h-3 opacity-70" />
+      {/* Dynamic Banner H-1 & Hari H */}
+      {upcomingEvents.map(event => {
+        const isToday = getEventStatus(event.event_date) === 'hari_ini';
+        
+        return (
+          <div 
+            key={event.id}
+            onClick={() => navigate('/calendar')}
+            className={`rounded-2xl p-5 text-white shadow-xl border border-white/20 relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform ${
+              isToday 
+                ? 'bg-gradient-to-br from-purple-500 to-indigo-500 shadow-purple-200/50' 
+                : 'bg-gradient-to-br from-couple-primary via-rose-500 to-purple-500 shadow-rose-200/50'
+            }`}
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+            
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm border border-white/20">
+                <Calendar className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-bold text-lg leading-tight">Movie Date & Dinner</h3>
-              <p className="text-xs opacity-80 mt-0.5">Minggu, 12 Mei • Mall Pekanbaru</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="bg-white/20 px-2 py-0.5 rounded-md text-[10px] font-bold backdrop-blur-sm border border-white/10">
+                    {isToday ? 'HARI INI!' : 'BESOK (H-1)'}
+                  </span>
+                  <Clock className="w-3 h-3 opacity-70" />
+                </div>
+                <h3 className="font-bold text-lg leading-tight flex items-center gap-1">
+                  {event.emoji} {event.title}
+                </h3>
+                <p className="text-xs opacity-80 mt-0.5">{event.location}</p>
+              </div>
+              <Heart className={`w-5 h-5 opacity-60 ${isToday ? 'animate-bounce' : 'animate-pulse'}`} fill="white" />
             </div>
-            <Heart className="w-5 h-5 opacity-60 animate-pulse" fill="white" />
           </div>
-        </div>
-      )}
+        );
+      })}
 
       {/* Status Cards Row */}
       <div className="grid grid-cols-2 gap-3">
@@ -105,7 +230,7 @@ export default function Dashboard() {
           </div>
           <div>
             <p className="text-sm font-bold text-couple-dark">PCR</p>
-            <p className="text-[10px] text-couple-muted">Aii sedang di sini</p>
+            <p className="text-[10px] text-couple-muted">{partnerName} sedang di sini</p>
           </div>
         </div>
 
@@ -133,45 +258,56 @@ export default function Dashboard() {
         <div className="flex justify-between items-center mb-4">
           <div>
             <h3 className="font-bold text-sm text-couple-dark">Daily Checklist</h3>
-            <p className="text-[10px] text-couple-muted">{tasks.filter(t => t.done).length}/{tasks.length} selesai</p>
+            <p className="text-[10px] text-couple-muted">{tasks.filter(t => t.is_done).length}/{tasks.length} selesai</p>
           </div>
           <span className="text-[10px] bg-rose-100/70 text-couple-primary border border-rose-200/50 px-2.5 py-1 rounded-lg font-bold">Hari ini</span>
         </div>
         
         <div className="space-y-2.5">
-          {tasks.map((task) => (
-            <div 
-              key={task.id} 
-              onClick={() => toggleTask(task.id)}
-              className={`flex items-center gap-3 p-3.5 rounded-xl transition-all duration-200 cursor-pointer border ${
-                task.done 
-                  ? 'bg-white/30 border-white/30' 
-                  : 'bg-white/50 border-white/60 hover:bg-white/70 hover:shadow-sm'
-              }`}
-            >
-              <div className={`transition-all duration-300 ${task.done ? 'scale-110' : 'scale-100'}`}>
-                {task.done ? (
-                  <CheckCircle2 className="text-couple-primary w-5 h-5" />
-                ) : (
-                  <Circle className="text-gray-300 w-5 h-5" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm truncate ${task.done ? 'text-gray-400 line-through' : 'font-medium text-couple-dark'}`}>
-                  {task.text}
-                </p>
-                <p className="text-[9px] text-gray-400">{task.time}</p>
-              </div>
-              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${
-                task.owner === 'Aii' 
-                  ? 'bg-rose-50 text-rose-500 border-rose-100' 
-                  : 'bg-blue-50 text-blue-500 border-blue-100'
-              }`}>
-                {task.owner}
-              </span>
-            </div>
-          ))}
+          {tasks.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">Memuat checklist...</p>
+          ) : (
+            tasks.slice(0, 5).map((task) => {
+              const isMine = task.owner === currentUser; // Penanda milik siapa tugas ini
+              return (
+                <div 
+                  key={task.id} 
+                  onClick={() => toggleTask(task)}
+                  className={`flex items-center gap-3 p-3.5 rounded-xl transition-all duration-200 border ${
+                    !isMine ? 'cursor-not-allowed opacity-75 grayscale-[20%]' : 'cursor-pointer hover:shadow-sm hover:bg-white/70'
+                  } ${
+                    task.is_done 
+                      ? 'bg-white/30 border-white/30 opacity-60' 
+                      : 'bg-white/50 border-white/60'
+                  }`}
+                >
+                  <div className={`transition-all duration-300 ${task.is_done ? 'scale-110' : 'scale-100'}`}>
+                    {task.is_done ? (
+                      <CheckCircle2 className="text-couple-primary w-5 h-5" />
+                    ) : (
+                      <Circle className="text-gray-300 w-5 h-5" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm truncate ${task.is_done ? 'text-gray-400 line-through' : 'font-medium text-couple-dark'}`}>
+                      {task.text}
+                    </p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${
+                    task.owner === 'Aii' 
+                      ? 'bg-rose-50 text-rose-500 border-rose-100' 
+                      : 'bg-blue-50 text-blue-500 border-blue-100'
+                  }`}>
+                    {task.owner}
+                  </span>
+                </div>
+              );
+            })
+          )}
         </div>
+        <button onClick={() => navigate('/todo')} className="w-full mt-4 text-xs font-bold text-couple-primary hover:text-rose-600 transition">
+          Lihat Semua Checklist →
+        </button>
       </div>
     </div>
   );

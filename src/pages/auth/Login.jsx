@@ -1,31 +1,36 @@
 import { Heart, Mail, Lock, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { supabase } from '../../lib/supabase';
 
 export default function Login() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    setErrorMsg('');
+
+    // Proses login ke Supabase
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
+
+    if (error) {
+      setErrorMsg('Email atau password salah! Coba lagi.');
+      setIsLoading(false);
+    } else {
       navigate('/dashboard'); 
-    }, 800);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated Background Blobs */}
-      <div className="absolute top-[-10%] left-[-10%] w-72 h-72 bg-rose-300/30 rounded-full blur-3xl animate-pulse-soft" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-80 h-80 bg-purple-300/30 rounded-full blur-3xl animate-pulse-soft" style={{ animationDelay: '1s' }} />
-      <div className="absolute top-[40%] right-[20%] w-40 h-40 bg-pink-300/20 rounded-full blur-2xl animate-float" />
-      
-      {/* Floating Hearts */}
-      <div className="absolute top-20 left-10 text-2xl animate-float opacity-30" style={{ animationDelay: '0.5s' }}>💕</div>
-      <div className="absolute bottom-32 right-12 text-xl animate-float opacity-20" style={{ animationDelay: '1.2s' }}>💖</div>
-      <div className="absolute top-40 right-16 text-lg animate-float opacity-25" style={{ animationDelay: '0.8s' }}>✨</div>
-
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-gradient-to-br from-couple-light via-rose-50 to-pink-100">
       <div className="glass-card-strong p-8 w-full max-w-sm text-center relative z-10">
         <div className="flex justify-center mb-6">
           <div className="relative">
@@ -39,15 +44,23 @@ export default function Login() {
         </div>
         
         <h1 className="text-2xl font-bold mb-1 text-couple-dark tracking-tight">Our Space</h1>
-        <p className="text-sm text-couple-muted mb-8 font-medium">Masuk untuk melanjutkan cinta kita 💕</p>
+        <p className="text-sm text-couple-muted mb-6 font-medium">Masuk untuk melanjutkan cinta kita 💕</p>
+
+        {errorMsg && (
+          <div className="bg-red-50 text-red-500 text-xs font-bold p-3 rounded-lg mb-4 border border-red-100">
+            {errorMsg}
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="relative group">
             <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-couple-primary transition-colors" />
             <input 
               type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="Email kamu" 
-              className="w-full pl-10 pr-4 py-3.5 bg-white/50 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-couple-primary/20 focus:border-couple-primary/30 transition-all text-sm placeholder:text-gray-400"
+              className="w-full pl-10 pr-4 py-3.5 bg-white/50 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-couple-primary/20 transition-all text-sm"
               required
             />
           </div>
@@ -55,9 +68,11 @@ export default function Login() {
           <div className="relative group">
             <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-couple-primary transition-colors" />
             <input 
-              type="password" 
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="Password" 
-              className="w-full pl-10 pr-4 py-3.5 bg-white/50 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-couple-primary/20 focus:border-couple-primary/30 transition-all text-sm placeholder:text-gray-400"
+              className="w-full pl-10 pr-4 py-3.5 bg-white/50 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-couple-primary/20 transition-all text-sm"
               required
             />
           </div>
@@ -65,22 +80,11 @@ export default function Login() {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full bg-gradient-to-r from-couple-primary to-rose-500 text-white font-bold py-3.5 rounded-xl hover:shadow-lg hover:shadow-rose-200/50 transition-all duration-200 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+            className="w-full bg-gradient-to-r from-couple-primary to-rose-500 text-white font-bold py-3.5 rounded-xl hover:shadow-lg transition-all active:scale-[0.98] mt-2"
           >
-            {isLoading ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Memuat...
-              </span>
-            ) : (
-              'Masuk'
-            )}
+            {isLoading ? 'Memeriksa Akun...' : 'Masuk'}
           </button>
         </form>
-
-        <p className="mt-6 text-xs text-gray-400">
-          Belum punya akun? <span className="text-couple-primary font-semibold cursor-pointer hover:underline">Daftar</span>
-        </p>
       </div>
     </div>
   );
