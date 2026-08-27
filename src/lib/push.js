@@ -2,7 +2,6 @@ import { supabase } from './supabase';
 
 const publicVapidKey = 'BLnvHWcJe1YUlTJ75QROoEsC-HZV0E6N9t7265O_F1o6-ewSPlfijXS31fOaNWehjGbFSO1k6oHFuwejn1zgoPk';
 
-// Fungsi bantuan untuk menerjemahkan kunci
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
@@ -21,23 +20,23 @@ export async function subscribeToPush(currentUser) {
   }
 
   try {
-    // 1. Minta Izin Notifikasi dari HP
+    // 1. Minta Izin Notifikasi dari HP/Browser
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      alert('Izin notifikasi ditolak! Kamu tidak akan menerima pemberitahuan.');
+      alert('Izin notifikasi ditolak!');
       return false;
     }
 
-    // 2. Daftarkan Service Worker
-    const register = await navigator.serviceWorker.register('/sw.js');
+    // 2. TUNGGU Service Worker yang sudah didaftarkan oleh VitePWA (PERBAIKAN BUG #1)
+    const register = await navigator.serviceWorker.ready;
 
-    // 3. Daftarkan HP ini ke Sistem Push Server Apple/Google
+    // 3. Daftarkan ke Push Manager
     const subscription = await register.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
     });
 
-    // 4. Simpan Alamat HP ke Supabase
+    // 4. Simpan ke Database Supabase
     const { data: existing } = await supabase.from('push_subscriptions').select('id').eq('user_id', currentUser).single();
     
     if (existing) {
