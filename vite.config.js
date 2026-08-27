@@ -1,10 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite' // <--- INI YANG TADI TERHAPUS
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [
     react(),
+    tailwindcss(), // <--- INI JUGA KEMBALI
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
@@ -13,16 +15,14 @@ export default defineConfig({
         description: 'Private App for Faqih & Aii',
         theme_color: '#ffffff',
         background_color: '#ffffff',
-        display: 'standalone', // Membuatnya tampil full screen tanpa URL bar di HP
+        display: 'standalone',
         icons: [
           {
-            // NAMA FILE DISESUAIKAN DI SINI 👇
             src: '/logo_our.png', 
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            // NAMA FILE DISESUAIKAN DI SINI 👇
             src: '/logo_our.png',
             sizes: '512x512',
             type: 'image/png'
