@@ -3,6 +3,19 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
+// IMPORT LIBRARY MAP INTERAKTIF (Baru)
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// MEMBUAT ICON PIN CUSTOM (Mencegah error icon bawaan Leaflet di React)
+const customIcon = new L.DivIcon({
+  html: `<div style="background-color: #f43f5e; width: 22px; height: 22px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); animation: pulse 2s infinite;"></div>`,
+  className: 'custom-leaflet-icon',
+  iconSize: [22, 22],
+  iconAnchor: [11, 11]
+});
+
 export default function Location() {
   const { currentUser } = useOutletContext();
   const targetUser = currentUser === 'Aii' ? 'Faqih' : 'Aii'; 
@@ -180,23 +193,37 @@ export default function Location() {
         </div>
       </div>
 
-      {/* Map Card */}
+      {/* MAP INTERAKTIF KARTU */}
       <div className="glass-card p-3">
-        <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl h-64 w-full relative overflow-hidden border border-white/60 shadow-inner">
-          <div className="absolute inset-0 opacity-[0.15]" style={{ backgroundImage: 'linear-gradient(#f43f5e 1px, transparent 1px), linear-gradient(90deg, #f43f5e 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+        <div className="rounded-2xl h-64 w-full relative overflow-hidden border border-white/60 shadow-inner z-0">
           
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full z-10">
-            <div className="relative">
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-2 bg-black/10 rounded-full blur-sm" />
-              <div className="bg-white p-2.5 rounded-full shadow-xl border-2 border-couple-primary animate-bounce">
-                <MapPin className="text-couple-primary w-6 h-6" />
-              </div>
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white" />
+          {/* Render Peta Hanya Jika Koordinat Tersedia */}
+          {status.latitude && status.longitude ? (
+            <MapContainer 
+              center={[status.latitude, status.longitude]} 
+              zoom={16} 
+              scrollWheelZoom={true} 
+              style={{ height: '100%', width: '100%', zIndex: 0 }}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <Marker position={[status.latitude, status.longitude]} icon={customIcon}>
+                <Popup>
+                  <span className="font-bold">Titik terakhir {targetUser}</span>
+                </Popup>
+              </Marker>
+            </MapContainer>
+          ) : (
+            <div className="flex items-center justify-center h-full bg-gray-100 text-gray-400 text-sm font-medium">
+              Koordinat belum tersedia
             </div>
-          </div>
+          )}
 
-          <div className="absolute bottom-3 left-3 right-3 z-10">
-            <div className="bg-white/90 backdrop-blur-xl p-3.5 rounded-xl shadow-lg border border-white/80 flex items-center gap-3">
+          {/* Overlay Info (Melayang di atas Peta) */}
+          <div className="absolute bottom-3 left-3 right-3 z-[1000] pointer-events-none">
+            <div className="bg-white/90 backdrop-blur-xl p-3.5 rounded-xl shadow-lg border border-white/80 flex items-center gap-3 pointer-events-auto">
               <div className="bg-couple-primary/10 p-2 rounded-lg shrink-0">
                 <MapPin className="w-5 h-5 text-couple-primary" />
               </div>
@@ -217,7 +244,7 @@ export default function Location() {
             rel="noreferrer"
             className="bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-blue-200/50 hover:shadow-xl transition-all active:scale-95 text-sm"
           >
-            <Navigation className="w-4 h-4" /> Buka di Google Maps
+            <Navigation className="w-4 h-4" /> Buka Arah di Google Maps
           </a>
         </div>
       </div>

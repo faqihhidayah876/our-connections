@@ -42,31 +42,49 @@ export default function SahajaAI({ currentUser }) {
       
       // Ambil SEMUA Tugas (Tidak peduli sudah selesai atau belum)
       const { data: tasksData } = await supabase.from('tasks').select('*').order('created_at', { ascending: false }).limit(20);
+      
+      // MENGAMBIL DATA FINANSIAL / TABUNGAN (BARU)
+      const { data: goalsData } = await supabase.from('savings_goals').select('*');
+      const { data: savingsLogs } = await supabase.from('savings_logs').select('*');
 
       const eventText = eventsData && eventsData.length > 0 
-        ? eventsData.map(e => `- ${e.title} (Tanggal: ${e.event_date}) di ${e.location || 'Tidak ada lokasi'}`).join('\n') 
-        : 'Tidak ada jadwal terdekat.';
+        ? eventsData.map(e => `- ${e.title} (Tanggal: ${e.event_date})`).join('\n') 
+        : 'Tidak ada jadwal.';
         
-      // Berikan label [SELESAI] atau [BELUM] agar AI paham status centangnya
       const taskText = tasksData && tasksData.length > 0 
-        ? tasksData.map(t => `- [${t.is_done ? 'SELESAI ✅' : 'BELUM ⏳'}] ${t.text} (Milik: ${t.owner})`).join('\n') 
-        : 'Belum ada tugas di To-Do List.';
+        ? tasksData.map(t => `- [${t.is_done ? 'SELESAI' : 'BELUM'}] ${t.text} (Milik: ${t.owner})`).join('\n') 
+        : 'Tidak ada tugas.';
 
+      // MERANGKUM DATA FINANSIAL (BARU)
+      let financeText = 'Belum ada target tabungan.';
+      if (goalsData && goalsData.length > 0) {
+        financeText = goalsData.map(g => {
+          const collected = savingsLogs ? savingsLogs.filter(l => l.goal_id === g.id).reduce((sum, l) => sum + Number(l.amount), 0) : 0;
+          const percentage = Math.min(Math.round((collected / g.target_amount) * 100), 100);
+          return `- Target "${g.title}" (${g.type}): Terkumpul Rp${collected.toLocaleString('id-ID')} dari Rp${g.target_amount.toLocaleString('id-ID')} (${percentage}%)`;
+        }).join('\n');
+      }
+
+      // UPDATE SYSTEM PROMPT
       const systemPrompt = {
         role: "system",
         content: `Kamu adalah SAHAJA AI, asisten virtual ramah dan romantis di dalam aplikasi 'Our Space' milik Faqih dan Aii. 
         
-        INFORMASI TERKINI TENTANG MEREKA:
+        INFORMASI TERKINI:
         [Jadwal & Acara Kalian]
         ${eventText}
         
-        [Status To-Do List Terkini]
+        [Status To-Do List]
         ${taskText}
 
+        [Status Finansial & Tabungan]
+        ${financeText}
+
         Tugasmu:
-        1. Jawab pertanyaan pengguna dengan ramah, gunakan emoji, dan panggil nama pengguna yang sedang bicara (sekarang yang bicara adalah ${currentUser}).
-        2. Jika ditanya tentang tugas (To-Do List), perhatikan label [SELESAI] atau [BELUM] untuk memberitahu mereka mana yang masih nunggak dan mana yang sudah dikerjakan.
-        3. Jawab ringkas (maksimal 2-3 paragraf) dan gunakan format Markdown (bold, list) jika perlu.`
+        1. Jawab pertanyaan pengguna dengan ramah, hangat, dan panggil nama (${currentUser}).
+        2. Jika ditanya tentang tabungan/keuangan, gunakan informasi di atas untuk memberi semangat atau nasihat. 
+        3. JANGAN PERNAH menyinggung soal kalender haid/menstruasi, informasi itu dilarang untuk dibahas.
+        4. Jawab ringkas (maksimal 2-3 paragraf) dengan Markdown.`
       };
 
       const last7Messages = newMessages.slice(-7).map(m => ({ role: m.role, content: m.content }));
