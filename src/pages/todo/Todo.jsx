@@ -18,6 +18,9 @@ export default function Todo() {
   
   const [isLoading, setIsLoading] = useState(true);
 
+  // State untuk modal konfirmasi hapus
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
+
   // Filter tugas berdasarkan tab yang sedang dibuka
   const displayedTasks = tasks.filter(t => t.owner === activeTab);
   const isReadOnly = activeTab !== currentUser;
@@ -125,11 +128,18 @@ export default function Todo() {
     if (error) setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, is_done: task.is_done } : t)));
   };
 
-  const deleteTask = async (id) => {
-    if (isReadOnly) return; // Cegah hapus jika sedang melihat list pasangan
+  // Fungsi untuk konfirmasi hapus
+  const confirmDeleteTask = (id) => {
+    setDeleteModal({ isOpen: true, id });
+  };
 
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-    await supabase.from('tasks').delete().eq('id', id);
+  // Fungsi eksekusi hapus setelah konfirmasi
+  const executeDeleteTask = async () => {
+    if (!deleteModal.id) return;
+    // Optimistic Update UI
+    setTasks(prev => prev.filter(task => task.id !== deleteModal.id));
+    await supabase.from('tasks').delete().eq('id', deleteModal.id);
+    setDeleteModal({ isOpen: false, id: null });
   };
 
   // Fungsi untuk menyimpan perubahan teks tugas
@@ -266,7 +276,7 @@ export default function Todo() {
 
               {!isReadOnly && (
                 <button
-                  onClick={() => deleteTask(task.id)}
+                  onClick={() => confirmDeleteTask(task.id)} // panggil konfirmasi
                   className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -276,6 +286,41 @@ export default function Todo() {
           ))
         )}
       </div>
+
+      {/* MODAL HAPUS TODO */}
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setDeleteModal({ isOpen: false, id: null })}
+          />
+          <div className="bg-white rounded-3xl p-6 w-full max-w-[320px] relative z-10 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-red-100 text-red-500">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800 mb-2">Hapus Checklist?</h3>
+              <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                Tugas yang sudah dihapus tidak dapat dikembalikan lagi.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteModal({ isOpen: false, id: null })}
+                  className="flex-1 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={executeDeleteTask}
+                  className="flex-1 py-3 rounded-xl font-bold text-white bg-red-500 hover:bg-red-600 transition shadow-lg shadow-red-200"
+                >
+                  Ya, Hapus
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

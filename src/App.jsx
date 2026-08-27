@@ -10,6 +10,7 @@ import Location from './pages/location/Location';
 import Haid from './pages/haid/Haid';
 import Chat from './pages/chat/Chat';
 import Savings from './pages/savings/Savings';
+import Lifestyle from './pages/lifestyle/Lifestyle';
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
           <Route path="/haid" element={<Haid />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/savings" element={<Savings />} />
+          <Route path="/lifestyle" element={<Lifestyle />} />
         </Route>
       </Routes>
     </Router>

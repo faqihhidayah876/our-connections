@@ -37,32 +37,36 @@ export default function SahajaAI({ currentUser }) {
     try {
       const today = new Date().toISOString().split('T')[0];
       
+      // Ambil Jadwal
       const { data: eventsData } = await supabase.from('events').select('*').gte('event_date', today);
-      const { data: tasksData } = await supabase.from('tasks').select('*').eq('is_done', true);
+      
+      // Ambil SEMUA Tugas (Tidak peduli sudah selesai atau belum)
+      const { data: tasksData } = await supabase.from('tasks').select('*').order('created_at', { ascending: false }).limit(20);
 
       const eventText = eventsData && eventsData.length > 0 
         ? eventsData.map(e => `- ${e.title} (Tanggal: ${e.event_date}) di ${e.location || 'Tidak ada lokasi'}`).join('\n') 
         : 'Tidak ada jadwal terdekat.';
         
+      // Berikan label [SELESAI] atau [BELUM] agar AI paham status centangnya
       const taskText = tasksData && tasksData.length > 0 
-        ? tasksData.map(t => `- ${t.text} (Diselesaikan oleh: ${t.owner})`).join('\n') 
-        : 'Belum ada tugas yang diselesaikan.';
+        ? tasksData.map(t => `- [${t.is_done ? 'SELESAI ✅' : 'BELUM ⏳'}] ${t.text} (Milik: ${t.owner})`).join('\n') 
+        : 'Belum ada tugas di To-Do List.';
 
       const systemPrompt = {
         role: "system",
-        content: `Kamu adalah SAHAJA AI, asisten virtual ramah dan romantis yang terintegrasi di dalam aplikasi 'Our Space'. Aplikasi ini digunakan oleh pasangan bernama Faqih dan Aii. 
+        content: `Kamu adalah SAHAJA AI, asisten virtual ramah dan romantis di dalam aplikasi 'Our Space' milik Faqih dan Aii. 
         
         INFORMASI TERKINI TENTANG MEREKA:
         [Jadwal & Acara Kalian]
         ${eventText}
         
-        [Tugas yang sudah berhasil diselesaikan]
+        [Status To-Do List Terkini]
         ${taskText}
 
         Tugasmu:
         1. Jawab pertanyaan pengguna dengan ramah, gunakan emoji, dan panggil nama pengguna yang sedang bicara (sekarang yang bicara adalah ${currentUser}).
-        2. Jika mereka bertanya tentang jadwal, kencan, atau tugas, gunakan INFORMASI TERKINI di atas untuk menjawab dengan gaya bahasa yang asyik (jangan sebutkan format mentahnya).
-        3. Jawab ringkas (maksimal 2-3 paragraf). Gunakan format Markdown (bold, list) jika perlu.`
+        2. Jika ditanya tentang tugas (To-Do List), perhatikan label [SELESAI] atau [BELUM] untuk memberitahu mereka mana yang masih nunggak dan mana yang sudah dikerjakan.
+        3. Jawab ringkas (maksimal 2-3 paragraf) dan gunakan format Markdown (bold, list) jika perlu.`
       };
 
       const last7Messages = newMessages.slice(-7).map(m => ({ role: m.role, content: m.content }));

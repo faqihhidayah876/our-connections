@@ -12,6 +12,9 @@ export default function Calendar() {
     title: '', date: '', time: '', location: '', emoji: '✨'
   });
 
+  // State untuk modal konfirmasi hapus
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
+
   const fetchEvents = async () => {
     const { data, error } = await supabase
       .from('events')
@@ -69,9 +72,17 @@ export default function Calendar() {
     setIsSubmitting(false);
   };
 
-  const deleteEvent = async (id) => {
-    setEvents((prev) => prev.filter((e) => e.id !== id));
-    await supabase.from('events').delete().eq('id', id);
+  // Fungsi untuk konfirmasi hapus
+  const confirmDeleteEvent = (id) => {
+    setDeleteModal({ isOpen: true, id });
+  };
+
+  // Fungsi eksekusi hapus setelah konfirmasi
+  const executeDeleteEvent = async () => {
+    if (!deleteModal.id) return;
+    setEvents(prev => prev.filter(event => event.id !== deleteModal.id));
+    await supabase.from('events').delete().eq('id', deleteModal.id);
+    setDeleteModal({ isOpen: false, id: null });
   };
 
   // Fungsi pintar penentu status H-1 atau Hari H
@@ -205,7 +216,7 @@ export default function Calendar() {
                           <span className="bg-gradient-to-r from-couple-primary to-rose-500 text-white text-[9px] font-bold px-2 py-1 rounded-full shadow-sm">BESOK (H-1)</span>
                         )}
                         
-                        <button onClick={() => deleteEvent(event.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded text-red-400 transition-all">
+                        <button onClick={() => confirmDeleteEvent(event.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded text-red-400 transition-all">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -239,6 +250,41 @@ export default function Calendar() {
           <Plus className="w-4 h-4 group-hover:scale-125 transition-transform" />
           <span className="text-sm font-semibold">Tambah Rencana Kencan</span>
         </button>
+      )}
+
+      {/* MODAL HAPUS RENCANA */}
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setDeleteModal({ isOpen: false, id: null })}
+          />
+          <div className="bg-white rounded-3xl p-6 w-full max-w-[320px] relative z-10 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-red-100 text-red-500">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800 mb-2">Hapus Rencana?</h3>
+              <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                Rencana yang sudah dihapus tidak dapat dikembalikan lagi.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteModal({ isOpen: false, id: null })}
+                  className="flex-1 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={executeDeleteEvent}
+                  className="flex-1 py-3 rounded-xl font-bold text-white bg-red-500 hover:bg-red-600 transition shadow-lg shadow-red-200"
+                >
+                  Ya, Hapus
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

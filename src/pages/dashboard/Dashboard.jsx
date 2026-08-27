@@ -1,4 +1,4 @@
-import { MapPin, Battery, CheckCircle2, Circle, Calendar, BellRing, Heart, Clock, TrendingUp } from 'lucide-react';
+import { MapPin, Battery, CheckCircle2, Circle, Calendar, BellRing, Heart, Clock, TrendingUp, Activity, Wallet, Droplet, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -12,6 +12,9 @@ export default function Dashboard() {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [partnerProfile, setPartnerProfile] = useState(null);
   const [daysTogether, setDaysTogether] = useState(0);
+
+  // State untuk Visualisasi Baru (Habit & Tabungan)
+  const [stats, setStats] = useState({ habitScore: 0, habitCompleted: 0, habitTotal: 0, topGoal: null });
 
   const greetingText = currentUser === 'Aii' ? 'Hai Aii Cantikk! 💕' : 'Hai Faqih!!';
   const partnerName = currentUser === 'Aii' ? 'Faqih' : 'Aii';
@@ -53,13 +56,15 @@ export default function Dashboard() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const isoStart = today.toISOString();
-    
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
+    const todayStr = new Date().toLocaleDateString('en-CA');
 
+    // Fetch Tasks
     const { data: todayTasks } = await supabase.from('tasks').select('*').gte('created_at', isoStart).order('created_at', { ascending: false });
     if (todayTasks) setTasks(todayTasks);
 
+    // Fetch Events
     const { data: allEvents } = await supabase.from('events').select('*').gte('event_date', today.toISOString().split('T')[0]).order('event_date', { ascending: true });
     if (allEvents) {
       const filteredEvents = allEvents.filter(event => {
@@ -69,6 +74,26 @@ export default function Dashboard() {
       });
       setUpcomingEvents(filteredEvents);
     }
+
+    // --- FETCH DATA UNTUK VISUALISASI ---
+    // 1. Habit Data
+    const { data: habits } = await supabase.from('habits').select('id').eq('owner', currentUser);
+    const { data: logs } = await supabase.from('habit_logs').select('habit_id').eq('completed_date', todayStr).eq('owner', currentUser);
+    const totalHabits = habits?.length || 0;
+    const completed = logs?.length || 0;
+    const score = totalHabits === 0 ? 0 : Math.round((completed / totalHabits) * 100);
+
+    // 2. Savings Data
+    const { data: goals } = await supabase.from('savings_goals').select('*').order('created_at', { ascending: false }).limit(1);
+    let topGoalData = null;
+    if (goals && goals.length > 0) {
+      const g = goals[0];
+      const { data: savingsLogs } = await supabase.from('savings_logs').select('amount').eq('goal_id', g.id);
+      const collected = savingsLogs?.reduce((sum, log) => sum + Number(log.amount), 0) || 0;
+      topGoalData = { ...g, collected, percentage: Math.min(Math.round((collected / g.target_amount) * 100), 100) };
+    }
+
+    setStats({ habitScore: score, habitCompleted: completed, habitTotal: totalHabits, topGoal: topGoalData });
   };
 
   const fetchProfilesData = async () => {
@@ -84,11 +109,9 @@ export default function Dashboard() {
           const diffDays = Math.ceil(Math.abs(now - start) / (1000 * 60 * 60 * 24));
           setDaysTogether(diffDays);
         }
-        
         const myMoodIdx = moods.findIndex(m => m.emoji === myProfile.mood);
         if (myMoodIdx !== -1) setSelectedMood(myMoodIdx);
       }
-
       const partner = data.find(p => p.id !== user?.id);
       if (partner) setPartnerProfile(partner);
     }
@@ -97,7 +120,6 @@ export default function Dashboard() {
   const handleUpdateMood = async (idx) => {
     setSelectedMood(idx);
     const chosenEmoji = moods[idx].emoji;
-    
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase.from('profiles').update({ mood: chosenEmoji, updated_at: new Date() }).eq('id', user.id);
@@ -105,9 +127,7 @@ export default function Dashboard() {
   };
 
   const toggleTask = async (task) => {
-    // KUNCI KEAMANAN: Cek apakah tugas ini milik orang yang sedang login
     if (task.owner !== currentUser) return; 
-
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: !task.is_done } : t));
     await supabase.from('tasks').update({ is_done: !task.is_done }).eq('id', task.id);
   };
@@ -120,8 +140,13 @@ export default function Dashboard() {
     return eventDate.getTime() === today.getTime() ? 'hari_ini' : 'besok';
   };
 
+  // Konstanta SVG untuk Donut Chart Melingkar
+  const circleRadius = 32;
+  const circleCircumference = 2 * Math.PI * circleRadius;
+  const strokeOffset = circleCircumference - (stats.habitScore / 100) * circleCircumference;
+
   return (
-    <div className="pb-20 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="pb-24 space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* Welcome Header Dinamis */}
       <div className="flex justify-between items-end px-1">
@@ -181,10 +206,87 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* WIDGET BARU: Active Lifestyle (Donut Chart) */}
+      <div onClick={() => navigate('/lifestyle')} className="glass-card p-4 relative overflow-hidden cursor-pointer hover:bg-white/60 transition group border-orange-200/40">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Activity className="w-4 h-4 text-orange-500" />
+              <h3 className="font-bold text-sm text-couple-dark uppercase tracking-wider">Lifestyle Hari Ini</h3>
+            </div>
+            {stats.habitTotal === 0 ? (
+              <p className="text-xs text-gray-400 mt-2">Belum ada target sehat.</p>
+            ) : (
+              <>
+                <p className="text-xl font-black text-couple-dark mb-0.5">
+                  {stats.habitCompleted} <span className="text-xs font-medium text-gray-400">/ {stats.habitTotal} Kebiasaan</span>
+                </p>
+                <p className={`text-[9px] font-bold px-2 py-0.5 rounded-full inline-block ${stats.habitScore >= 100 ? 'bg-green-100 text-green-600' : stats.habitScore >= 50 ? 'bg-orange-100 text-orange-600' : 'bg-red-100 text-red-500'}`}>
+                  {stats.habitScore >= 100 ? 'Target Tercapai! 🔥' : stats.habitScore >= 50 ? 'Ayo semangat!' : 'Yuk, mulai bergerak!'}
+                </p>
+              </>
+            )}
+          </div>
+          
+          <div className="relative w-20 h-20 flex-shrink-0 flex items-center justify-center">
+            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r={circleRadius} stroke="currentColor" strokeWidth="7" fill="transparent" className="text-gray-100" />
+              <circle 
+                cx="40" cy="40" r={circleRadius} stroke="currentColor" strokeWidth="7" fill="transparent" 
+                strokeDasharray={circleCircumference} strokeDashoffset={strokeOffset} strokeLinecap="round"
+                className={`transition-all duration-1000 ease-out ${stats.habitScore >= 100 ? 'text-green-500' : 'text-orange-500'}`} 
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-sm font-bold text-couple-dark">{stats.habitScore}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* WIDGET BARU: Tabungan & Haid (2 Kolom) */}
+      <div className="grid grid-cols-2 gap-3">
+        <div onClick={() => navigate('/savings')} className="glass-card p-4 flex flex-col justify-between cursor-pointer hover:bg-white/60 transition h-[110px] relative overflow-hidden border-couple-primary/20">
+          <div className="absolute top-0 right-0 p-3 opacity-10"><Wallet className="w-10 h-10" /></div>
+          <div>
+            <div className="flex items-center gap-1 mb-1">
+              <Wallet className="w-3 h-3 text-couple-primary" />
+              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Tabungan Teratas</span>
+            </div>
+            <p className="font-bold text-xs text-couple-dark truncate">{stats.topGoal ? stats.topGoal.title : 'Belum ada'}</p>
+          </div>
+          {stats.topGoal ? (
+            <div className="mt-2">
+              <p className="text-[10px] font-bold text-couple-primary mb-1">{stats.topGoal.percentage}% Terkumpul</p>
+              <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-gradient-to-r from-rose-400 to-couple-primary h-full rounded-full transition-all duration-1000" style={{ width: `${stats.topGoal.percentage}%` }} />
+              </div>
+            </div>
+          ) : (
+            <p className="text-[9px] text-gray-400 mt-2">Buat impian baru 👉</p>
+          )}
+        </div>
+
+        <div onClick={() => navigate('/haid')} className="glass-card p-4 flex flex-col justify-between cursor-pointer hover:bg-white/60 transition h-[110px] bg-gradient-to-br from-pink-50/50 to-rose-50/50 border-rose-100 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-3 opacity-10"><Droplet className="w-10 h-10 text-rose-500" /></div>
+          <div>
+            <div className="flex items-center gap-1 mb-1">
+              <Droplet className="w-3 h-3 text-rose-500" />
+              <span className="text-[9px] font-bold text-rose-400 uppercase tracking-wider">Siklus Haid Aii</span>
+            </div>
+            <p className="font-bold text-xs text-couple-dark">Pantau Kesehatan</p>
+          </div>
+          <div className="mt-2">
+             <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-white text-rose-500 px-2 py-1 rounded-full shadow-sm border border-rose-100">
+               Buka Kalender <ChevronRight className="w-2.5 h-2.5" />
+             </span>
+          </div>
+        </div>
+      </div>
+
       {/* Dynamic Banner H-1 & Hari H */}
       {upcomingEvents.map(event => {
         const isToday = getEventStatus(event.event_date) === 'hari_ini';
-        
         return (
           <div 
             key={event.id}
@@ -196,7 +298,6 @@ export default function Dashboard() {
             }`}
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
-            
             <div className="relative z-10 flex items-center gap-4">
               <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm border border-white/20">
                 <Calendar className="w-6 h-6 text-white" />
@@ -268,7 +369,7 @@ export default function Dashboard() {
             <p className="text-xs text-gray-400 text-center py-4">Memuat checklist...</p>
           ) : (
             tasks.slice(0, 5).map((task) => {
-              const isMine = task.owner === currentUser; // Penanda milik siapa tugas ini
+              const isMine = task.owner === currentUser;
               return (
                 <div 
                   key={task.id} 

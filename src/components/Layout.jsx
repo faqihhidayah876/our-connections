@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { 
   Menu, X, Home, CheckSquare, CalendarDays, MapPin, 
-  Settings, User, ArrowLeft, Heart, Droplet, MessageCircle, Wallet 
+  Settings, User, ArrowLeft, Heart, Droplet, MessageCircle, Wallet, Activity 
 } from 'lucide-react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import SahajaAI from './SahajaAI'; // Integrasi SAHAJA AI
+import SahajaAI from './SahajaAI'; 
 
 export default function Layout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -58,7 +58,8 @@ export default function Layout() {
   // Penentuan Judul Halaman di Header
   const getPageTitle = () => {
     if (location.pathname.includes('/chat')) return 'Obrolan Kita';
-    if (location.pathname.includes('/savings')) return 'Target Tabungan'; // <--- Judul halaman Tabungan
+    if (location.pathname.includes('/savings')) return 'Target Tabungan';
+    if (location.pathname.includes('/lifestyle')) return 'Active Lifestyle'; // <--- Judul Halaman Lifestyle
     if (location.pathname.includes('/todo')) return 'To-Do List';
     if (location.pathname.includes('/calendar')) return 'Kalender';
     if (location.pathname.includes('/location')) return 'Lokasi & Baterai';
@@ -72,7 +73,8 @@ export default function Layout() {
   const menuItems = [
     { name: 'Dashboard', icon: Home, path: '/dashboard' },
     { name: 'Obrolan', icon: MessageCircle, path: '/chat' },
-    { name: 'Tabungan', icon: Wallet, path: '/savings' }, // <--- Menu Tabungan ditambahkan di sini
+    { name: 'Tabungan', icon: Wallet, path: '/savings' },
+    { name: 'Lifestyle', icon: Activity, path: '/lifestyle' }, // <--- Menu Lifestyle ditambahkan di sini
     { name: 'To-Do List', icon: CheckSquare, path: '/todo' },
     { name: 'Kalender', icon: CalendarDays, path: '/calendar' },
     { name: 'Lokasi & Baterai', icon: MapPin, path: '/location' },
@@ -128,7 +130,7 @@ export default function Layout() {
             </div>
           </div>
 
-          <nav className="flex-1 px-4 space-y-1.5">
+          <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
             {menuItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -153,7 +155,6 @@ export default function Layout() {
         <Outlet context={{ currentUser }} />
       </main>
 
-      {/* TAMPILKAN SAHAJA AI DI SINI */}
       <SahajaAI currentUser={currentUser} />
     </div>
   );
