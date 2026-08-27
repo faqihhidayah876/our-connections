@@ -9,6 +9,7 @@ import Calendar from './pages/calendar/Calendar';
 import Location from './pages/location/Location';
 import Haid from './pages/haid/Haid';
 import Chat from './pages/chat/Chat';
+import Savings from './pages/savings/Savings';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
           <Route path="/location" element={<Location />} />
           <Route path="/haid" element={<Haid />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/savings" element={<Savings />} />
         </Route>
       </Routes>
     </Router>

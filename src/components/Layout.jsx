@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Menu, X, Home, CheckSquare, CalendarDays, MapPin, Settings, User, ArrowLeft, Heart, Droplet, MessageCircle } from 'lucide-react';
+import { 
+  Menu, X, Home, CheckSquare, CalendarDays, MapPin, 
+  Settings, User, ArrowLeft, Heart, Droplet, MessageCircle, Wallet 
+} from 'lucide-react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import SahajaAI from './SahajaAI'; // Integrasi SAHAJA AI
 
 export default function Layout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -30,7 +34,6 @@ export default function Layout() {
       if (session) fetchMyAvatar(session.user.id);
     });
 
-    // Dengarkan perubahan profil secara real-time di Layout!
     const profileSub = supabase.channel('layout_avatar')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
         if (currentSession) fetchMyAvatar(currentSession.user.id);
@@ -52,8 +55,10 @@ export default function Layout() {
   const currentUser = session?.user?.email === 'aii@connections.com' ? 'Aii' : 'Faqih';
   const isDashboard = location.pathname === '/dashboard';
 
+  // Penentuan Judul Halaman di Header
   const getPageTitle = () => {
-    if (location.pathname.includes('/chat')) return 'Obrolan Kita'; // <-- Tambahan
+    if (location.pathname.includes('/chat')) return 'Obrolan Kita';
+    if (location.pathname.includes('/savings')) return 'Target Tabungan'; // <--- Judul halaman Tabungan
     if (location.pathname.includes('/todo')) return 'To-Do List';
     if (location.pathname.includes('/calendar')) return 'Kalender';
     if (location.pathname.includes('/location')) return 'Lokasi & Baterai';
@@ -63,9 +68,11 @@ export default function Layout() {
     return 'Our Space';
   };
 
+  // Daftar Menu di Sidebar
   const menuItems = [
     { name: 'Dashboard', icon: Home, path: '/dashboard' },
-    { name: 'Obrolan', icon: MessageCircle, path: '/chat' }, // <-- Tambahan
+    { name: 'Obrolan', icon: MessageCircle, path: '/chat' },
+    { name: 'Tabungan', icon: Wallet, path: '/savings' }, // <--- Menu Tabungan ditambahkan di sini
     { name: 'To-Do List', icon: CheckSquare, path: '/todo' },
     { name: 'Kalender', icon: CalendarDays, path: '/calendar' },
     { name: 'Lokasi & Baterai', icon: MapPin, path: '/location' },
@@ -74,7 +81,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen max-w-md mx-auto relative flex flex-col">
-      {/* Header */}
+      {/* Header Utama */}
       <header className="sticky top-0 z-40 bg-white/20 backdrop-blur-2xl border-b border-white/40 px-4 py-3.5 flex justify-between items-center">
         {isDashboard ? (
           <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 bg-white/65 hover:bg-white/90 rounded-xl transition-all shadow-sm border border-white/50 active:scale-95">
@@ -145,6 +152,9 @@ export default function Layout() {
       <main className="flex-1 p-4">
         <Outlet context={{ currentUser }} />
       </main>
+
+      {/* TAMPILKAN SAHAJA AI DI SINI */}
+      <SahajaAI currentUser={currentUser} />
     </div>
   );
 }

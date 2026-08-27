@@ -1,102 +1,116 @@
-import { MapPin, BatteryCharging, Navigation, Clock, RefreshCw, Battery as BatteryIcon } from 'lucide-react';
+import { MapPin, BatteryCharging, Navigation, Clock, RefreshCw, Battery as BatteryIcon, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
 export default function Location() {
-  // Simulasi Role (Nanti diganti Auth)
-  const currentUser = "Faqih";
-  const targetUser = "Aii"; 
+  const { currentUser } = useOutletContext();
+  const targetUser = currentUser === 'Aii' ? 'Faqih' : 'Aii'; 
 
   const [status, setStatus] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateMsg, setUpdateMsg] = useState('');
+  const [batteryWarning, setBatteryWarning] = useState(false);
 
   useEffect(() => {
     fetchTargetStatus();
 
-    // Listen perubahan secara Real-time!
     const sub = supabase.channel('status_channel')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_status', filter: `id=eq.${targetUser}` }, (payload) => {
         setStatus(payload.new);
       }).subscribe();
 
     return () => supabase.removeChannel(sub);
-  }, []);
+  }, [targetUser]);
 
   const fetchTargetStatus = async () => {
     const { data } = await supabase.from('user_status').select('*').eq('id', targetUser).single();
     if (data) setStatus(data);
   };
 
-  // Fungsi membaca sensor HP dan mengirimnya ke Supabase
   const pushMyStatus = async () => {
     setIsUpdating(true);
     setUpdateMsg('Membaca sensor HP...');
+    setBatteryWarning(false);
     
     try {
-      let batLevel = 100;
+      let batLevel = 85; // Fallback jika diblokir
       let isCharg = false;
       
-      // 1. Baca Sensor Baterai (Jika disupport browser)
-      if ('getBattery' in navigator) {
-        const battery = await navigator.getBattery();
-        batLevel = Math.round(battery.level * 100);
-        isCharg = battery.charging;
+      // 1. Baca Sensor Baterai (Aman dari error iOS)
+      if (navigator.getBattery) {
+        try {
+          const battery = await navigator.getBattery();
+          batLevel = Math.round(battery.level * 100);
+          isCharg = battery.charging;
+        } catch (e) {
+          setBatteryWarning(true);
+        }
+      } else {
+        setBatteryWarning(true);
       }
 
-      // 2. Baca Sensor GPS
+      // 2. Baca Sensor GPS (Dioptimasi untuk Mobile)
       if ('geolocation' in navigator) {
-        setUpdateMsg('Mencari sinyal GPS...');
+        setUpdateMsg('Mencari sinyal lokasi...');
         
         navigator.geolocation.getCurrentPosition(async (pos) => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
           
           setUpdateMsg('Menerjemahkan koordinat...');
-          // 3. Terjemahkan Koordinat jadi Nama Jalan (Reverse Geocoding)
+          
           let locName = "Lokasi tidak diketahui";
           try {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
             const data = await res.json();
-            // Ambil 3 bagian pertama dari alamat biar tidak terlalu panjang
             locName = data.display_name.split(',').slice(0, 3).join(', ');
           } catch (e) {
             console.log("Geocoding gagal", e);
           }
 
-          // 4. Kirim ke Supabase!
           setUpdateMsg('Menyimpan ke database...');
-          await supabase.from('user_status').update({
+          
+          await supabase.from('user_status').upsert({
+            id: currentUser,
             battery_level: batLevel,
             is_charging: isCharg,
             latitude: lat,
             longitude: lon,
             location_name: locName,
             updated_at: new Date().toISOString()
-          }).eq('id', currentUser);
+          });
 
-          setUpdateMsg('Status kamu berhasil dikirim ke Aii!');
+          setUpdateMsg('Status kamu berhasil diperbarui!');
           setTimeout(() => setUpdateMsg(''), 3000);
           setIsUpdating(false);
 
         }, (err) => {
-          setUpdateMsg('Akses lokasi ditolak browser!');
+          // Penanganan Error GPS Spesifik
+          let errorStr = 'Gagal melacak lokasi.';
+          if (err.code === 1) errorStr = 'Akses lokasi ditolak! Izinkan di pengaturan HP.';
+          if (err.code === 2) errorStr = 'Sinyal GPS tidak ditemukan.';
+          if (err.code === 3) errorStr = 'Pencarian lokasi Timeout (Terlalu lama).';
+          
+          setUpdateMsg(`❌ ${errorStr}`);
           setIsUpdating(false);
-        }, { enableHighAccuracy: true });
+        }, 
+        // OPTIMASI MOBILE: Akurasi diturunkan sedikit agar jauh lebih cepat dan anti-timeout
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
+        );
       } else {
-        setUpdateMsg('Browser tidak support lokasi!');
+        setUpdateMsg('❌ Browser ini tidak mendukung GPS!');
         setIsUpdating(false);
       }
     } catch (error) {
-      setUpdateMsg('Gagal update status!');
+      setUpdateMsg('❌ Terjadi kesalahan sistem!');
       setIsUpdating(false);
     }
   };
 
-  // Hitung selisih waktu update
   const getTimeAgo = (dateString) => {
     if (!dateString) return '';
-    const diff = Math.floor((new Date() - new Date(dateString)) / 60000); // dalam menit
+    const diff = Math.floor((new Date() - new Date(dateString)) / 60000);
     if (diff < 1) return 'Baru saja';
     if (diff < 60) return `${diff} menit yang lalu`;
     const hours = Math.floor(diff / 60);
@@ -112,7 +126,7 @@ export default function Location() {
   );
 
   return (
-    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
       {/* Battery Status */}
       <div className="glass-card p-5 relative overflow-hidden">
@@ -152,7 +166,6 @@ export default function Location() {
           </div>
         </div>
         
-        {/* Battery Bar */}
         <div className="mt-5 w-full bg-gray-200/40 rounded-full h-2 overflow-hidden">
           <div 
             className={`h-full rounded-full relative transition-all duration-1000 ${
@@ -184,11 +197,13 @@ export default function Location() {
 
           <div className="absolute bottom-3 left-3 right-3 z-10">
             <div className="bg-white/90 backdrop-blur-xl p-3.5 rounded-xl shadow-lg border border-white/80 flex items-center gap-3">
-              <div className="bg-couple-primary/10 p-2 rounded-lg">
+              <div className="bg-couple-primary/10 p-2 rounded-lg shrink-0">
                 <MapPin className="w-5 h-5 text-couple-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm text-couple-dark truncate">{status.location_name}</p>
+                <p className="font-bold text-sm text-couple-dark truncate">
+                  {status.location_name || 'Menunggu pembaruan lokasi...'}
+                </p>
                 <p className="text-[10px] text-gray-500 font-medium">Titik terakhir {targetUser}</p>
               </div>
             </div>
@@ -208,17 +223,30 @@ export default function Location() {
       </div>
 
       {/* Kirim Status Sendiri */}
-      <div className="glass-card p-4 text-center border-dashed border-2 border-rose-300/50 bg-white/30">
-        <p className="text-xs font-semibold text-gray-600 mb-3">Aii juga butuh tahu keadaan kamu!</p>
+      <div className="glass-card p-5 text-center border-dashed border-2 border-rose-300/50 bg-white/30">
+        <p className="text-xs font-semibold text-gray-600 mb-3">Bagikan lokasi terkinimu kepada {targetUser}</p>
+        
         <button 
           onClick={pushMyStatus}
           disabled={isUpdating}
-          className="w-full bg-white border border-gray-200 text-couple-dark font-bold py-3 rounded-xl shadow-sm hover:bg-gray-50 transition active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70"
+          className="w-full bg-white border border-gray-200 text-couple-dark font-bold py-3.5 rounded-xl shadow-sm hover:bg-gray-50 transition active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70"
         >
-          {isUpdating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          {isUpdating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 text-couple-primary" />}
           Update Lokasi & Bateraiku
         </button>
-        {updateMsg && <p className="text-[10px] font-bold text-couple-primary mt-2">{updateMsg}</p>}
+        
+        {updateMsg && (
+          <p className={`text-[10px] font-bold mt-3 ${updateMsg.includes('❌') ? 'text-red-500' : 'text-couple-primary'}`}>
+            {updateMsg}
+          </p>
+        )}
+
+        {batteryWarning && (
+          <div className="mt-3 bg-yellow-50 text-yellow-700 text-[9px] p-2 rounded-lg border border-yellow-200 flex items-start gap-1.5 text-left">
+            <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+            <p>Sistem keamanan browser HP kamu memblokir sensor baterai. Baterai akan ditampilkan sebagai 85%.</p>
+          </div>
+        )}
       </div>
 
     </div>

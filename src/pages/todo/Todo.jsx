@@ -12,6 +12,10 @@ export default function Todo() {
 
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState('');
+  
+  // TAMBAHAN STATE UNTUK EDIT
+  const [editTask, setEditTask] = useState({ id: null, text: '' });
+  
   const [isLoading, setIsLoading] = useState(true);
 
   // Filter tugas berdasarkan tab yang sedang dibuka
@@ -128,6 +132,18 @@ export default function Todo() {
     await supabase.from('tasks').delete().eq('id', id);
   };
 
+  // Fungsi untuk menyimpan perubahan teks tugas
+  const handleUpdateTask = async (id) => {
+    if (!editTask.text.trim()) return;
+    
+    // Update state lokal
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, text: editTask.text } : t));
+    setEditTask({ id: null, text: '' }); // Tutup mode edit
+    
+    // Update ke Supabase
+    await supabase.from('tasks').update({ text: editTask.text }).eq('id', id);
+  };
+
   const progress = displayedTasks.length === 0 ? 0 : Math.round((displayedTasks.filter(t => t.is_done).length / displayedTasks.length) * 100);
 
   return (
@@ -212,56 +228,50 @@ export default function Todo() {
           displayedTasks.map((task) => (
             <div
               key={task.id}
-              className={`glass-card p-4 flex items-center gap-3 transition-all duration-300 group ${
-                task.is_done ? 'opacity-60' : ''
-              }`}
+              className="glass-card p-4 flex items-center justify-between group hover:bg-white/60 transition-all"
             >
-              <button
-                onClick={() => toggleTask(task)}
-                className={`transition-transform ${isReadOnly ? 'cursor-not-allowed opacity-70' : 'active:scale-90'}`}
-                disabled={isReadOnly}
-              >
-                {task.is_done ? (
-                  <CheckCircle2 className="text-couple-primary w-6 h-6" />
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <button
+                  onClick={() => !isReadOnly && toggleTask(task)}
+                  className={`transition-all duration-300 ${task.is_done ? 'scale-110' : 'scale-100'} ${isReadOnly ? 'cursor-not-allowed opacity-70' : ''}`}
+                  disabled={isReadOnly}
+                >
+                  {task.is_done ? (
+                    <CheckCircle2 className="text-couple-primary w-5 h-5" />
+                  ) : (
+                    <Circle className="text-gray-300 w-5 h-5" />
+                  )}
+                </button>
+
+                {/* Jika mode Edit aktif untuk task ini */}
+                {editTask.id === task.id ? (
+                  <input
+                    type="text"
+                    value={editTask.text}
+                    onChange={(e) => setEditTask({ ...editTask, text: e.target.value })}
+                    onBlur={() => handleUpdateTask(task.id)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleUpdateTask(task.id)}
+                    className="flex-1 bg-white/70 px-2 py-1 rounded border border-gray-200 text-sm outline-none"
+                    autoFocus
+                  />
                 ) : (
-                  <Circle className="text-gray-300 w-6 h-6 group-hover:text-couple-primary/50 transition-colors" />
-                )}
-              </button>
-
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm truncate transition-all ${task.is_done ? 'text-gray-400 line-through' : 'font-medium text-couple-dark'}`}>
-                  {task.text}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[9px] bg-white/60 text-gray-500 px-1.5 py-0.5 rounded border border-white/40">
-                    {task.category}
-                  </span>
-                  <span className="flex items-center gap-0.5 text-[9px] text-gray-400">
-                    <Calendar className="w-2.5 h-2.5" />
-                    Hari ini
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg ${
-                  task.owner === 'Aii'
-                    ? 'bg-gradient-to-r from-rose-100 to-pink-100 text-rose-600'
-                    : 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-600'
-                }`}>
-                  {task.owner}
-                </span>
-
-                {/* Tombol Hapus hanya muncul kalau bukan Read Only */}
-                {!isReadOnly && (
-                  <button
-                    onClick={() => deleteTask(task.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-red-50 rounded-lg"
+                  <p
+                    onClick={() => !isReadOnly && setEditTask({ id: task.id, text: task.text })}
+                    className={`text-sm truncate cursor-pointer flex-1 ${task.is_done ? 'text-gray-400 line-through' : 'font-medium text-couple-dark'} ${isReadOnly ? 'cursor-default' : ''}`}
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                  </button>
+                    {task.text}
+                  </p>
                 )}
               </div>
+
+              {!isReadOnly && (
+                <button
+                  onClick={() => deleteTask(task.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           ))
         )}
