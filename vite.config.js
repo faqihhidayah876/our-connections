@@ -1,14 +1,24 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite' // <--- INI YANG TADI TERHAPUS
+import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [
     react(),
-    tailwindcss(), // <--- INI JUGA KEMBALI
+    tailwindcss(),
     VitePWA({
+      strategies: 'injectManifest', // Menggunakan custom service worker
+      srcDir: 'src',
+      filename: 'sw.js',            // File service worker utama kita nanti di folder src
       registerType: 'autoUpdate',
+      
+      // Pengaturan agar Service Worker aktif saat npm run dev
+      devOptions: {
+        enabled: true,
+        type: 'module',
+      },
+
       manifest: {
         name: 'Our Space',
         short_name: 'OurSpace',

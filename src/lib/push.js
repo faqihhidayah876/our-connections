@@ -29,7 +29,7 @@ export async function subscribeToPush(currentUser) {
     }
 
     // 2. Daftarkan Service Worker
-    const register = await navigator.serviceWorker.register('/push-sw.js');
+    const register = await navigator.serviceWorker.register('/sw.js');
 
     // 3. Daftarkan HP ini ke Sistem Push Server Apple/Google
     const subscription = await register.pushManager.subscribe({
