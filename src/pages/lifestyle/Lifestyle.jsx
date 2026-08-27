@@ -125,7 +125,10 @@ export default function Lifestyle() {
                     </div>
                   </div>
                   {isMine && (
-                    <button onClick={() => setDeleteModal({ isOpen: true, id: habit.id })} className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl shrink-0">
+                    <button 
+                      onClick={() => setDeleteModal({ isOpen: true, id: habit.id })} 
+                      className="p-2 bg-red-50 text-red-500 rounded-xl shadow-sm border border-red-100 active:scale-95 transition"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}

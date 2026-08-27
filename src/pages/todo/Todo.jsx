@@ -276,8 +276,8 @@ export default function Todo() {
 
               {!isReadOnly && (
                 <button
-                  onClick={() => confirmDeleteTask(task.id)} // panggil konfirmasi
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl"
+                  onClick={() => confirmDeleteTask(task.id)}
+                  className="p-2 bg-red-50 text-red-500 rounded-xl shadow-sm border border-red-100 active:scale-95 transition"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

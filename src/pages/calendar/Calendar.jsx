@@ -216,7 +216,7 @@ export default function Calendar() {
                           <span className="bg-gradient-to-r from-couple-primary to-rose-500 text-white text-[9px] font-bold px-2 py-1 rounded-full shadow-sm">BESOK (H-1)</span>
                         )}
                         
-                        <button onClick={() => confirmDeleteEvent(event.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded text-red-400 transition-all">
+                        <button onClick={() => confirmDeleteEvent(event.id)} className="p-2 bg-red-50 text-red-500 rounded-xl shadow-sm border border-red-100 active:scale-95 transition">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

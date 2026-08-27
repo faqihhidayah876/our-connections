@@ -75,9 +75,25 @@ export default function Chat() {
     
     const encryptedText = encryptText(textToSend); 
 
+    // Kirim pesan ke Supabase
     await supabase.from('messages').insert([
       { sender: currentUser, text: encryptedText }
     ]);
+
+    // 👇 TAMBAHKAN KODE INI TEPAT DI BAWAHNYA 👇
+    try {
+      // Membangunkan robot Edge Function secara instan
+      await supabase.functions.invoke('chat-notif', {
+        body: {
+          type: 'INSERT',
+          table: 'messages',
+          record: { sender: currentUser } // Mengirimkan info siapa yang chat
+        }
+      });
+    } catch (err) {
+      console.error("Gagal memanggil robot notifikasi:", err);
+    }
+    // 👆 ========================================= 👆
   };
 
   // --- Fungsi Hapus Pesan dengan Modal ---
@@ -130,18 +146,20 @@ export default function Chat() {
                       {isMe && (
                         <button 
                           onClick={() => confirmDeleteMessage(msg.id)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-red-50 text-red-500 rounded-full hover:bg-red-100 mb-1"
+                          className="p-1.5 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 active:scale-95 transition"
                           title="Hapus Pesan"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
 
-                      <div className={`px-4 py-2.5 shadow-sm relative ${
-                        isMe 
-                          ? 'bg-gradient-to-br from-couple-primary to-rose-500 text-white rounded-2xl rounded-tr-sm shadow-rose-200/50' 
-                          : 'bg-white/80 backdrop-blur-md border border-white/60 text-couple-dark rounded-2xl rounded-tl-sm shadow-gray-200/30'
-                      }`}>
+                      {/* Bubble pesan dengan class baru */}
+                      <div className={`
+                        ${isMe 
+                          ? 'bg-rose-500 text-white rounded-2xl rounded-tr-sm p-3 shadow-md' 
+                          : 'bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-100 rounded-2xl rounded-tl-sm p-3 shadow-sm border border-gray-100 dark:border-slate-700'
+                        }
+                      `}>
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                       </div>
                     </div>
@@ -157,13 +175,14 @@ export default function Chat() {
           <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={handleSendMessage} className="mt-2 flex items-end gap-2 bg-white/40 p-2 rounded-3xl border border-white/60 shadow-sm backdrop-blur-xl">
+        {/* Kotak Input Bawah dengan class baru */}
+        <form onSubmit={handleSendMessage} className="bg-white/95 dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 p-3 flex items-end gap-2 backdrop-blur-md">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder={`Tulis pesan untuk ${partnerName}...`}
-            className="flex-1 bg-transparent px-4 py-3 text-sm focus:outline-none text-couple-dark placeholder:text-gray-400"
+            className="flex-1 bg-transparent px-4 py-3 text-sm focus:outline-none text-couple-dark dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500"
           />
           <button 
             type="submit" 

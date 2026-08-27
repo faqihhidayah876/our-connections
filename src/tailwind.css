@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* KUNCI UTAMA: Memaksa Tailwind v4 patuh pada tombol kita, bukan tema HP */
+@variant dark (&:is(.dark *));
+
 @theme {
   --color-couple-light: #fff0f3;
   --color-couple-primary: #f43f5e;
@@ -15,6 +18,7 @@ body {
   min-height: 100vh;
   background-attachment: fixed;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 /* Glassmorphism Premium */
@@ -28,6 +32,7 @@ body {
     0 2px 8px 0 rgba(0, 0, 0, 0.04),
     inset 0 1px 0 0 rgba(255, 255, 255, 0.6);
   border-radius: 1.25rem;
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .glass-card-strong {
@@ -47,21 +52,13 @@ body {
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(-6px); }
 }
-
 @keyframes pulse-soft {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
-
 .animate-pulse-soft {
   animation: pulse-soft 2s ease-in-out infinite;
 }
@@ -88,38 +85,52 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(244, 63, 94, 0.4);
 }
-
-/* Input Focus Ring */
 input:focus, textarea:focus, select:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.15);
 }
-
-/* Button Press Effect */
 button:active {
   transform: scale(0.97);
 }
 
-
-/* Dark Mode Overrides */
+/* =======================================================
+   PERBAIKAN TOTAL DARK MODE
+======================================================= */
 .dark body {
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311026 100%) !important;
-  color: #f3f4f6 !important;
+  background: linear-gradient(135deg, #090d16 0%, #0f172a 40%, #1e112a 100%) !important;
+  color: #f8fafc !important;
 }
 
+/* Kartu Glassmorphism di Dark Mode */
 .dark .glass-card {
-  background: rgba(30, 41, 59, 0.5) !important;
+  background: rgba(30, 41, 59, 0.6) !important;
+  backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  color: #f3f4f6 !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4) !important;
+  color: #f8fafc !important;
 }
 
 .dark .glass-card-strong {
-  background: rgba(15, 23, 42, 0.75) !important;
+  background: rgba(15, 23, 42, 0.85) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5) !important;
 }
 
-.dark input, .dark textarea {
-  background: rgba(30, 41, 59, 0.6) !important;
-  color: white !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
+/* Otomatisasi Warna Teks Gelap Menjadi Terang */
+.dark .text-couple-dark { color: #f8fafc !important; }
+.dark .text-gray-800, .dark .text-gray-700 { color: #e2e8f0 !important; }
+.dark .text-gray-600, .dark .text-gray-500, .dark .text-couple-muted { color: #94a3b8 !important; }
+.dark .text-gray-400 { color: #64748b !important; }
+
+/* Input Form & Modal */
+.dark input, .dark textarea, .dark select {
+  background: rgba(15, 23, 42, 0.85) !important;
+  color: #f8fafc !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
 }
+.dark input::placeholder, .dark textarea::placeholder { color: #64748b !important; }
+.dark .bg-white { background-color: #1e293b !important; color: #f8fafc !important; }
+.dark .bg-gray-50 { background-color: #0f172a !important; }
+.dark .bg-gray-100 { background-color: #334155 !important; color: #f8fafc !important; }
+.dark .border-gray-200, .dark .border-white\/60, .dark .border-white\/80 { border-color: rgba(255, 255, 255, 0.1) !important; }
+.dark .divide-white\/40 > * { border-color: rgba(255, 255, 255, 0.08) !important; }

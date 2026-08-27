@@ -3,42 +3,94 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
-// IMPORT LIBRARY MAP INTERAKTIF (Baru)
+// IMPORT LIBRARY MAP INTERAKTIF
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// MEMBUAT ICON PIN CUSTOM (Mencegah error icon bawaan Leaflet di React)
-const customIcon = new L.DivIcon({
-  html: `<div style="background-color: #f43f5e; width: 22px; height: 22px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); animation: pulse 2s infinite;"></div>`,
-  className: 'custom-leaflet-icon',
-  iconSize: [22, 22],
-  iconAnchor: [11, 11]
-});
+// FUNGSI MEMBUAT ICON ZENLY (FOTO PROFIL)
+const createZenlyIcon = (avatarUrl, isMe) => {
+  const borderColor = isMe ? '#3b82f6' : '#f43f5e'; // Biru untuk diri sendiri, Pink untuk pasangan
+  const fallbackImg = 'https://ui-avatars.com/api/?background=random&color=fff&name=User';
+  
+  return new L.DivIcon({
+    html: `
+      <div style="position: relative; width: 44px; height: 44px;">
+        <div style="
+          width: 44px; height: 44px;
+          border-radius: 50%;
+          border: 3px solid ${borderColor};
+          box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+          background-image: url('${avatarUrl || fallbackImg}');
+          background-size: cover;
+          background-position: center;
+          background-color: white;
+          position: relative;
+          z-index: 10;
+        "></div>
+        <div style="
+          position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
+          width: 0; height: 0;
+          border-left: 8px solid transparent;
+          border-right: 8px solid transparent;
+          border-top: 10px solid ${borderColor};
+          z-index: 5;
+        "></div>
+      </div>
+    `,
+    className: 'custom-zenly-icon',
+    iconSize: [44, 54],
+    iconAnchor: [22, 54]
+  });
+};
 
 export default function Location() {
   const { currentUser } = useOutletContext();
   const targetUser = currentUser === 'Aii' ? 'Faqih' : 'Aii'; 
 
-  const [status, setStatus] = useState(null);
+  // STATE UNTUK KEDUA USER
+  const [status, setStatus] = useState(null); // Status Pasangan
+  const [myStatus, setMyStatus] = useState(null); // Status Saya
+  const [avatars, setAvatars] = useState({ me: '', partner: '' });
+
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateMsg, setUpdateMsg] = useState('');
   const [batteryWarning, setBatteryWarning] = useState(false);
 
   useEffect(() => {
-    fetchTargetStatus();
+    fetchData();
 
-    const sub = supabase.channel('status_channel')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_status', filter: `id=eq.${targetUser}` }, (payload) => {
-        setStatus(payload.new);
+    // Dengarkan perubahan dari KEDUA user
+    const sub = supabase.channel('zenly_status')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_status' }, (payload) => {
+        if (payload.new.id === targetUser) {
+          setStatus(payload.new);
+        } else if (payload.new.id === currentUser) {
+          setMyStatus(payload.new);
+        }
       }).subscribe();
 
     return () => supabase.removeChannel(sub);
-  }, [targetUser]);
+  }, [targetUser, currentUser]);
 
-  const fetchTargetStatus = async () => {
-    const { data } = await supabase.from('user_status').select('*').eq('id', targetUser).single();
-    if (data) setStatus(data);
+  const fetchData = async () => {
+    // 1. Ambil Data Lokasi
+    const { data: statusData } = await supabase.from('user_status').select('*');
+    if (statusData) {
+      setStatus(statusData.find(s => s.id === targetUser) || null);
+      setMyStatus(statusData.find(s => s.id === currentUser) || null);
+    }
+
+    // 2. Ambil Foto Profil Keduanya
+    const { data: profileData } = await supabase.from('profiles').select('id, name, avatar_url');
+    if (profileData) {
+      const myProf = profileData.find(p => p.name === currentUser || p.id === currentUser);
+      const partnerProf = profileData.find(p => p.name === targetUser || p.id === targetUser);
+      setAvatars({ 
+        me: myProf?.avatar_url || '', 
+        partner: partnerProf?.avatar_url || '' 
+      });
+    }
   };
 
   const pushMyStatus = async () => {
@@ -47,10 +99,9 @@ export default function Location() {
     setBatteryWarning(false);
     
     try {
-      let batLevel = 85; // Fallback jika diblokir
+      let batLevel = 85; 
       let isCharg = false;
       
-      // 1. Baca Sensor Baterai (Aman dari error iOS)
       if (navigator.getBattery) {
         try {
           const battery = await navigator.getBattery();
@@ -63,7 +114,6 @@ export default function Location() {
         setBatteryWarning(true);
       }
 
-      // 2. Baca Sensor GPS (Dioptimasi untuk Mobile)
       if ('geolocation' in navigator) {
         setUpdateMsg('Mencari sinyal lokasi...');
         
@@ -72,7 +122,6 @@ export default function Location() {
           const lon = pos.coords.longitude;
           
           setUpdateMsg('Menerjemahkan koordinat...');
-          
           let locName = "Lokasi tidak diketahui";
           try {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
@@ -84,7 +133,7 @@ export default function Location() {
 
           setUpdateMsg('Menyimpan ke database...');
           
-          await supabase.from('user_status').upsert({
+          const newStatus = {
             id: currentUser,
             battery_level: batLevel,
             is_charging: isCharg,
@@ -92,14 +141,16 @@ export default function Location() {
             longitude: lon,
             location_name: locName,
             updated_at: new Date().toISOString()
-          });
+          };
 
+          await supabase.from('user_status').upsert(newStatus);
+
+          setMyStatus(newStatus); // Langsung update UI peta kita
           setUpdateMsg('Status kamu berhasil diperbarui!');
           setTimeout(() => setUpdateMsg(''), 3000);
           setIsUpdating(false);
 
         }, (err) => {
-          // Penanganan Error GPS Spesifik
           let errorStr = 'Gagal melacak lokasi.';
           if (err.code === 1) errorStr = 'Akses lokasi ditolak! Izinkan di pengaturan HP.';
           if (err.code === 2) errorStr = 'Sinyal GPS tidak ditemukan.';
@@ -108,7 +159,6 @@ export default function Location() {
           setUpdateMsg(`❌ ${errorStr}`);
           setIsUpdating(false);
         }, 
-        // OPTIMASI MOBILE: Akurasi diturunkan sedikit agar jauh lebih cepat dan anti-timeout
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
         );
       } else {
@@ -138,10 +188,15 @@ export default function Location() {
     </div>
   );
 
+  // Menentukan titik tengah peta (Prioritas: Pasangan > Saya > Padang)
+  const mapCenter = status?.latitude ? [status.latitude, status.longitude] 
+                  : myStatus?.latitude ? [myStatus.latitude, myStatus.longitude] 
+                  : [-0.9471, 100.4172]; // Koordinat Default: Padang, Sumbar
+
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
-      {/* Battery Status */}
+      {/* Battery Status (Tetap sama seperti aslimu) */}
       <div className="glass-card p-5 relative overflow-hidden">
         {status.is_charging && (
           <div className="absolute top-0 right-0 w-32 h-32 bg-green-200/40 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
@@ -193,35 +248,38 @@ export default function Location() {
         </div>
       </div>
 
-      {/* MAP INTERAKTIF KARTU */}
+      {/* MAP INTERAKTIF (ZENLY STYLE) */}
       <div className="glass-card p-3">
-        <div className="rounded-2xl h-64 w-full relative overflow-hidden border border-white/60 shadow-inner z-0">
+        <div className="rounded-2xl h-[350px] w-full relative overflow-hidden border border-white/60 shadow-inner z-0">
           
-          {/* Render Peta Hanya Jika Koordinat Tersedia */}
-          {status.latitude && status.longitude ? (
-            <MapContainer 
-              center={[status.latitude, status.longitude]} 
-              zoom={16} 
-              scrollWheelZoom={true} 
-              style={{ height: '100%', width: '100%', zIndex: 0 }}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              <Marker position={[status.latitude, status.longitude]} icon={customIcon}>
-                <Popup>
-                  <span className="font-bold">Titik terakhir {targetUser}</span>
-                </Popup>
+          <MapContainer 
+            center={mapCenter} 
+            zoom={16} 
+            scrollWheelZoom={true} 
+            style={{ height: '100%', width: '100%', zIndex: 0 }}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            
+            {/* 1. PIN PASANGAN (WARNA PINK) */}
+            {status?.latitude && (
+              <Marker position={[status.latitude, status.longitude]} icon={createZenlyIcon(avatars.partner, false)}>
+                <Popup><span className="font-bold">{targetUser} di sini</span></Popup>
               </Marker>
-            </MapContainer>
-          ) : (
-            <div className="flex items-center justify-center h-full bg-gray-100 text-gray-400 text-sm font-medium">
-              Koordinat belum tersedia
-            </div>
-          )}
+            )}
 
-          {/* Overlay Info (Melayang di atas Peta) */}
+            {/* 2. PIN SAYA (WARNA BIRU) */}
+            {myStatus?.latitude && (
+              <Marker position={[myStatus.latitude, myStatus.longitude]} icon={createZenlyIcon(avatars.me, true)}>
+                <Popup><span className="font-bold">Kamu di sini</span></Popup>
+              </Marker>
+            )}
+
+          </MapContainer>
+
+          {/* Overlay Info (Tetap sama seperti aslimu) */}
           <div className="absolute bottom-3 left-3 right-3 z-[1000] pointer-events-none">
             <div className="bg-white/90 backdrop-blur-xl p-3.5 rounded-xl shadow-lg border border-white/80 flex items-center gap-3 pointer-events-auto">
               <div className="bg-couple-primary/10 p-2 rounded-lg shrink-0">
@@ -237,6 +295,7 @@ export default function Location() {
           </div>
         </div>
 
+        {/* Tombol Buka di Google Maps (Tetap sama seperti aslimu) */}
         <div className="grid grid-cols-1 mt-3">
           <a 
             href={`https://www.google.com/maps?q=${status.latitude},${status.longitude}`}
@@ -249,7 +308,7 @@ export default function Location() {
         </div>
       </div>
 
-      {/* Kirim Status Sendiri */}
+      {/* Kirim Status Sendiri (Tetap sama seperti aslimu) */}
       <div className="glass-card p-5 text-center border-dashed border-2 border-rose-300/50 bg-white/30">
         <p className="text-xs font-semibold text-gray-600 mb-3">Bagikan lokasi terkinimu kepada {targetUser}</p>
         
